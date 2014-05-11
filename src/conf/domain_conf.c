@@ -348,6 +348,7 @@ VIR_ENUM_IMPL(virDomainFSWrpolicy, VIR_DOMAIN_FS_WRPOLICY_LAST,
 VIR_ENUM_IMPL(virDomainNet, VIR_DOMAIN_NET_TYPE_LAST,
               "user",
               "ethernet",
+              "vhostuser",
               "server",
               "client",
               "mcast",
@@ -1331,6 +1332,11 @@ void virDomainNetDefFree(virDomainNetDefPtr def)
     case VIR_DOMAIN_NET_TYPE_ETHERNET:
         VIR_FREE(def->data.ethernet.dev);
         VIR_FREE(def->data.ethernet.ipaddr);
+        break;
+
+    case VIR_DOMAIN_NET_TYPE_VHOSTUSER:
+        VIR_FREE(def->data.vhostuser.socket);
+        VIR_FREE(def->data.vhostuser.mode);
         break;
 
     case VIR_DOMAIN_NET_TYPE_SERVER:
@@ -6558,6 +6564,8 @@ virDomainNetDefParseXML(virDomainXMLOptionPtr xmlopt,
     char *script = NULL;
     char *address = NULL;
     char *port = NULL;
+    char *vhostuser_socket = NULL;
+    char *vhostuser_mode = NULL;
     char *model = NULL;
     char *backend = NULL;
     char *txmode = NULL;
@@ -6615,6 +6623,11 @@ virDomainNetDefParseXML(virDomainXMLOptionPtr xmlopt,
                        xmlStrEqual(cur->name, BAD_CAST "source")) {
                 dev  = virXMLPropString(cur, "dev");
                 mode = virXMLPropString(cur, "mode");
+            } else if (!vhostuser_socket && !vhostuser_mode &&
+                         def->type == VIR_DOMAIN_NET_TYPE_VHOSTUSER &&
+                         xmlStrEqual(cur->name, BAD_CAST "socket")) {
+                vhostuser_socket = virXMLPropString(cur, "path");
+                vhostuser_mode = virXMLPropString(cur, "mode");
             } else if (!def->virtPortProfile
                        && xmlStrEqual(cur->name, BAD_CAST "virtualport")) {
                 if (def->type == VIR_DOMAIN_NET_TYPE_NETWORK) {
@@ -6781,6 +6794,25 @@ virDomainNetDefParseXML(virDomainXMLOptionPtr xmlopt,
             def->data.ethernet.ipaddr = address;
             address = NULL;
         }
+        break;
+
+    case VIR_DOMAIN_NET_TYPE_VHOSTUSER:
+        if (vhostuser_socket == NULL) {
+              virReportError(VIR_ERR_INTERNAL_ERROR, "%s",
+                           _("No <socket> 'path' attribute "
+                             "specified with <interface type='vhostuser'/>"));
+          goto error;
+        }
+        if (vhostuser_mode == NULL) {
+              virReportError(VIR_ERR_INTERNAL_ERROR, "%s",
+                           _("No <socket> 'mode' attribute "
+                             "specified with <interface type='vhostuser'/>"));
+          goto error;
+        }
+        def->data.vhostuser.socket = vhostuser_socket;
+        def->data.vhostuser.mode = vhostuser_mode;
+        vhostuser_socket = NULL;
+        vhostuser_mode = NULL;
         break;
 
     case VIR_DOMAIN_NET_TYPE_BRIDGE:
@@ -7017,6 +7049,8 @@ virDomainNetDefParseXML(virDomainXMLOptionPtr xmlopt,
     VIR_FREE(portgroup);
     VIR_FREE(address);
     VIR_FREE(port);
+    VIR_FREE(vhostuser_socket);
+    VIR_FREE(vhostuser_mode);
     VIR_FREE(ifname);
     VIR_FREE(dev);
     virDomainActualNetDefFree(actual);
@@ -15738,6 +15772,14 @@ virDomainNetDefFormat(virBufferPtr buf,
             if (def->data.ethernet.ipaddr)
                 virBufferAsprintf(buf, "<ip address='%s'/>\n",
                                   def->data.ethernet.ipaddr);
+            break;
+
+        case VIR_DOMAIN_NET_TYPE_VHOSTUSER:
+            virBufferEscapeString(buf, "<socket path='%s'",
+                                  def->data.vhostuser.socket);
+            virBufferEscapeString(buf, " mode='%s'",
+                                  def->data.vhostuser.mode);
+            virBufferAddLit(buf, "/>\n");
             break;
 
         case VIR_DOMAIN_NET_TYPE_BRIDGE:
