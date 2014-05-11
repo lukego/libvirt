@@ -2107,7 +2107,7 @@ virNWFilterRuleValidate(virNWFilterRuleDefPtr rule)
 {
     int ret = 0;
     portDataDefPtr portData = NULL;
-    nwItemDescPtr dataProtocolID;
+    nwItemDescPtr dataProtocolID = NULL;
     const char *protocol;
 
     switch (rule->prtclType) {
