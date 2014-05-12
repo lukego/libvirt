@@ -7915,7 +7915,7 @@ qemuBuildCommandLine(virConnectPtr conn,
             goto error;
         }
         virCommandAddArg(cmd, "-mem-path");
-        virCommandAddArgFormat(cmd, "%s,prealloc=on,share=%s",
+        virCommandAddArgFormat(cmd, "%s,share=%s",
                                cfg->hugepagePath,
                                def->mem.nosharepages ? "off" : "on");
     }
